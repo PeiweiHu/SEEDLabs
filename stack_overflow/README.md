@@ -56,7 +56,7 @@ sudo chmod 4755 stack_32
 # 创建badfile（badfile不存在会导致segmentation fault）
 touch badfile
 # 为了方便调试时断点设置，编译一个含有符号信息的stack
-gcc -g -o stack_32_dbg -z execstack -fno-stack-protector stack.c
+gcc -g -o stack_32_dbg -m32 -z execstack -fno-stack-protector stack.c
 # 使用gdb进行调试
 gdb stack_32_dbg
 # 对foo函数设置断点
