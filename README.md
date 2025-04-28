@@ -19,4 +19,6 @@
 4. stack_overflow: [栈溢出攻击实验](./stack_overflow/)
 5. return2libc: [return2libc攻击实验](./return2libc/)
 6. format: [格式化字符串攻击实验](./format/)
-7. 
+7. heap_study: [堆漏洞利用实验](./heap_study/)
+8. exercise1: [习题课1](./exercise1/)
+9. race_condition: [竞态条件漏洞实验](./race_condition/)
